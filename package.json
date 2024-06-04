@@ -1,4 +1,9 @@
 {
+  "name": "geowat",
+  "version": "0.0.1",
+  "author": "james@thechipfactory.co.uk",
+  "description": "Minimal WASM GeoTIFF module - WIP/Just for fun",
+  "license": "MIT",
   "dependencies": {
     "wat-wasm": "^1.0.43"
   }
