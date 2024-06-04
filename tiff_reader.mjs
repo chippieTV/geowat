@@ -21,14 +21,15 @@ import { parseTag } from "./reader_utils.mjs";
                 const tiffData = new Uint8Array(arrayBuffer);
 
                 // allocate memory in webassembly and copy TIFF data
-                const memoryView = new Uint8Array(memory.buffer);
-                memoryView.set(tiffData, 0);
+                // const memoryView = new Uint8Array(memory.buffer);
+                // memoryView.set(tiffData, 0);
 
                 // call load_tiff assuming it starts at mem 0
-                instance.exports.load_tiff(0, tiffData.length);
+                // instance.exports.load_tiff(0, tiffData.length);
 
                 // do something
 
+                // JS version to base actual WASM WAT off of
                 tiff_stats(tiffData)
             };
             reader.readAsArrayBuffer(file);
@@ -36,6 +37,12 @@ import { parseTag } from "./reader_utils.mjs";
     });
 })();
 
+const parsedFileObj = {};
+
+/**
+ * 
+ * @param {ArrayBuffer} t 
+ */
 function tiff_stats(t) { // for typing tiff_bytes is long - just use t
     console.log("Generating TIFF stats in JS so we don't need to mess up the minimalist WAT.");
     console.log(`${t.length} bytes`);
@@ -50,25 +57,46 @@ function tiff_stats(t) { // for typing tiff_bytes is long - just use t
     // should be 16 LE/BE bits === 42. This file is OK but should consider endianness carefully
     if (t[2] !== 42) console.log("something wrong with file", t[2]);
 
-    console.log(`First IFD byte offset === ${t[4]}`)
+    // console.log(`First IFD byte offset === ${t[4]}`)
 
-    // the cost to get a DataView maybe means we should grab chunks and process together to reduce overhead?
-    const first_IFD_offset = new DataView(t.buffer, 4, 4).getUint32(0, stats.littleEndian);
-    console.log(first_IFD_offset)
+    let IFD_offset = new DataView(t.buffer, 4, 4).getUint32(0, stats.littleEndian);
     
-
-    let number_of_tags = new DataView(t.buffer, first_IFD_offset, 2).getUint16(0, stats.littleEndian);
-    console.log("number of tags", number_of_tags);
-
-    const raw_tag_data = new DataView(t.buffer, first_IFD_offset + 2, 12 * number_of_tags);
+    const dataview = new DataView(t.buffer);
 
     // lets make a JS object with tags, and follow the inner data as necessary
-    const tiff_data = {};
+    const IFD_data = {};
+    let IFD_id = 0;
 
-    for (let i = 0; i < number_of_tags; i++) {
+    while (true) {
+        IFD_data[`IFD_${IFD_id}`] = {};
 
-        parseTag(raw_tag_data, i, stats.littleEndian, true);
+        const number_of_tags = new DataView(t.buffer, IFD_offset, 2).getUint16(0, stats.littleEndian);
+        // console.log("number of tags", number_of_tags);
+        IFD_data[`IFD_${IFD_id}`]["_IFD_offset"] = IFD_offset;
+        IFD_data[`IFD_${IFD_id}`]["_number_of_tags"] = number_of_tags;
+
+        for (let i = 0; i < number_of_tags; i++) {
+            const {field_name, ...fields} = parseTag(dataview, IFD_offset + 2, i, stats.littleEndian);
+            IFD_data[`IFD_${IFD_id}`][field_name] = {
+                field_name,
+                ...fields
+            };
+        }
+        console.log("last 32bits of IFD", IFD_offset + 2 + (12 * number_of_tags))
+        // next IFD or 0
+        const next_ifd_offset = new DataView(t.buffer, IFD_offset + 2 + (12 * number_of_tags), 4).getUint32(0, stats.littleEndian);
+    
+        console.log("next IFD offset", next_ifd_offset);
         
+        if (next_ifd_offset === 0) break;
 
+        IFD_offset = next_ifd_offset;
+        IFD_id++;
     }
+
+
+    console.log(t)
+
+    console.log(IFD_data);
 }
+
