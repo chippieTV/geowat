@@ -1,19 +1,19 @@
 # Reading TIFF with WASM
 
 ## Goals
-Make a tiny TIFF reader ideally with no dependencies. Only needs to support a small subset of TIFF's functionality, i.e. the bigger goal is GeoTIFF and COG with the least amount of code and greatest understanding..
+Make a tiny TIFF reader ideally with no dependencies. Only needs to support a small subset of TIFF's functionality, i.e. the bigger goal is GeoTIFF and COG with the least amount of code and greatest understanding.. also .. just for fun.
 
 - read a TIFF file and extract metadata using only WAT
 - get pixels out of the the TIFF file and display somehow
     - write to a canvas
-    - write directly to a WebGL texture?
+    - write directly to a WebGL/WebGPU texture?
 - extract GeoTIFF metadata
 - consider how to calculate appropriate `range-requests` to use for COGs (this could be useful for some edge server or something).
 
 ## Building
-To build the WASM file you need to install `wat2wasm` using the following in your working directory `npm i wat-wasm`. You can try to install it globally but it asked for sudo so I opted to install locally to the project.
+To build the WASM file you need to install `wat2wasm` using the following in your working directory `npm i wat-wasm`. You can install it globally but it asked for sudo so I opted to install locally to the project.
 
-Once installed you can build the WASM file from the WAT using the following, replacing FILENAME with the appropriate file you wish to build. Be aware since it's not instaleld globally you have to reference the binary manually, you could add this to your PATH so you don't need to but that seems a bit heavy handed at the project level..
+Once installed you can build the WASM file from the WAT using the following, replacing FILENAME with the appropriate file you wish to build. Be aware since it's not installed globally you have to reference the binary manually, you could add this to your PATH so you don't need to but that seems a bit heavy handed at the project level..
 
 `./node_modules/.bin/wat2wasm FILENAME.wat`
 
@@ -35,5 +35,10 @@ First step is using the Chrome Dev Tools to inspect the WASM as it runs. The bas
 A couple of points of note:
 - Every build the browser seems to give the WASM file a different hash in the sources panel, so wherever you set breakpoints you will need to go back to the `instance.exports` line in the JS and step INTO the WASM file and add your breakpoints back in.
 - The WASM memory is set to a single 'page' (64KB) which is enough for the small sample image but not enough for real world TIFF data. Consider how to calculate the appropriate size for this or load in small chunks if that makes sense? TBD
-- There is no mechanism to do anything yet besides loading bytes and reading directly inside of Chrome Dev Tools. Need to figure out what is necessary to bounce useful data back to the browser. This partly comes under writing to texture etc., however beyond that, writing out metadata to the browser as parsed from WASM for debugging would be nice.
+- There is no mechanism to do anything yet besides loading bytes and reading directly inside of Chrome Dev Tools. Need to figure out what is necessary to bounce useful data back to the browser. This partly comes under writing to texture etc., however beyond that, writing out metadata to the browser as parsed from WASM for debugging would be nice. For now I am making this functionality in JS and plan to take only the minimum useful parts and rewrite into the WASM module (i.e. I don't need to identify the human readable names of tags, only for debugging).
 - The goal is for minimalism so ideally no logging, no C stdlib, just keeping the WASM as small as possible. At the same time it may be reasonable to expand on this later since TIFF files are generally huge, worrying about saving a few bytes in the program at the expense of stability seems ill advised.
+
+
+## References
+
+https://www.loc.gov/preservation/digital/formats/content/tiff_tags.shtml
