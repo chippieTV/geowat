@@ -20,12 +20,16 @@ import { parseTag } from "./reader_utils.mjs";
                 const arrayBuffer = reader.result;
                 const tiffData = new Uint8Array(arrayBuffer);
 
-                // allocate memory in webassembly and copy TIFF data
-                // const memoryView = new Uint8Array(memory.buffer);
-                // memoryView.set(tiffData, 0);
-
-                // call load_tiff assuming it starts at mem 0
-                // instance.exports.load_tiff(0, tiffData.length);
+                try {
+                    // allocate memory in webassembly and copy TIFF data
+                    const memoryView = new Uint8Array(memory.buffer);
+                    memoryView.set(tiffData, 0);
+    
+                    // call load_tiff assuming it starts at mem 0
+                    instance.exports.load_tiff(0, tiffData.length);
+                } catch(e) {
+                    console.log("Probably not enough WASM memory allocated (only works with file <64KB for now).", e);
+                }
 
                 // do something
 
