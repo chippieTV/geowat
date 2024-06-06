@@ -5,7 +5,9 @@
   <title>TIFF Reader in WebAssembly</title>
 </head>
 <body>
-  <input type="file" id="file-input" />
+  <input type="file" id="file-input" style="display: block; padding: 16px;" />
   <script type="module" src="tiff_reader.mjs"></script>
+
+  <canvas width="256" height="256" id="debug_canvas" style="border: 1px solid #ccc;"></canvas>
 </body>
 </html>
