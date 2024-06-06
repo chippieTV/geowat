@@ -41,13 +41,18 @@ export const parseTag = (data_view, initial_offset, local_offset, littleEndian, 
 
     // if the data is NOT local then the 4 bytes are the location of the actual data
     const full_data = data_is_local ? data_or_address :
-        getData(data_view, data_or_address, data_type_id, count)
+        getData(
+            data_view,
+            data_or_address,
+            // override XMP data to ASCII
+            tag_id === 700 ? 2 : data_type_id,
+            count
+        )
         ;
 
     // extract data for more understandable fields
     // i.e. if compression, use getCompressionString(full_data)
     
-
     if (debug) {
         console.log(
             "Tag ID", tag_id,
@@ -62,7 +67,7 @@ export const parseTag = (data_view, initial_offset, local_offset, littleEndian, 
     }
 
     // most of this is just for debugging
-    // for some fields we could return things like '"Compression": "None"'
+    // for some fields we could return things like '"Compression", "None"'
     // although that is also debugging/human readable and actually the next steps
     // should work on the data and process according to the values
     return {
@@ -74,35 +79,46 @@ export const parseTag = (data_view, initial_offset, local_offset, littleEndian, 
         data_length,
         data_is_local,
         full_data,
-        address: !data_is_local ? data_or_address : undefined
+        address: !data_is_local ? data_or_address : undefined,
+        parsed: data_is_local ? getLocalValue(tag_id, data_or_address) : undefined
     }
+
 }
 
+/**
+ * Returns an array of parsed/fetched data from a tag ID and value input
+ * 
+ * @param {number} tag_id 
+ * @param {number} value 
+ * @returns {[string, string, number]}
+ * 
+ * [0] = Tag name
+ * [1] = string description of value
+ * [2] = raw value (same as input - pass through for convenience)
+ */
 const getLocalValue = (tag_id, value) => {
+    // mostly useful when we need to parse the types further as in the compression string
     switch(tag_id) {
-        case 256:
-            return {"ImageWidth": `${value}px`};
-        case 257:
-            return {"ImageHeight": `${value}px`};
-        case 258:
-            return {"BitsPerSample": value};
+        // case 256:
+        //     return ["ImageWidth", value, `${value}px`];
+        // case 257:
+        //     // ImageLength in Rows
+        //     return ["ImageHeight", value, `${value}px`];
         case 259:
-            return {"Compression": getCompressionString(value)};
+            return ["Compression", getCompressionString(value), value];
         case 262:
-            return {"PhotometricInterpretation": getPhotometricInterpretationString(value)};
-        case 284:
-            return {"PlanarConfiguration": value}; // TODO
-        case 339:
-            return {"SampleFormat": value}; // TODO
-        case 323:
-            return {"TileLength": value};
-        case 322:
-            return {"TileWidth": value};
+            return ["PhotometricInterpretation", getPhotometricInterpretationString(value), value];
+        
         default:
-            return {[`not-implemented${tag_id}`]: value};
+            return [`not-implemented-${tag_id}`, value, value];
     }
 }
 
+/**
+ * 
+ * @param {number} tag_id 
+ * @returns {string}
+ */
 const getTagString = (tag_id) => {
     switch(tag_id) {
         case 254:
@@ -196,6 +212,8 @@ const getTagString = (tag_id) => {
             return "GeoDoubleParamsTag";
         case 34737:
             return "GeoAsciiParamsTag";
+        case 37724:
+            return "ImageSourceData";
         case 42112:
             return "GDAL_METADATA";
         case 42113:
