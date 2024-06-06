@@ -31,6 +31,16 @@ First step is using the Chrome Dev Tools to inspect the WASM as it runs. The bas
 - the debugger will drop you at your break point. You can step over each line as you wish, but step INTO when you get to instance.exports to go inside WASM
 - step through the WASM watching it jump around the TIFF file, reading and writing data :D
 
+## Progress
+
+Reading into a COG (Cloud Optimized Geotiff) file generated with GDAL from Landsat data. The file was generated without compression to keep this first PoC simple, and the COG image pyramid was generated as part of the goal is understanding how to calculate range requests.
+
+Reading IFDs, hard coded reading internal TIFF tiles and writing to canvas. The data read out is 16bit single band, so it is scaled back to 8 bit for display. All RGB values in the canvas are from the same scaled data giving a greyscale image.
+
+![alt text](https://github.com/chippieTV/geowat/blob/main/reading-from-cog.png?raw=true)
+
+
+---
 
 A couple of points of note:
 - Every build the browser seems to give the WASM file a different hash in the sources panel, so wherever you set breakpoints you will need to go back to the `instance.exports` line in the JS and step INTO the WASM file and add your breakpoints back in.
