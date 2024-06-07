@@ -40,6 +40,16 @@ Reading IFDs, hard coded reading internal TIFF tiles and writing to canvas. The 
 ![alt text](https://github.com/chippieTV/geowat/blob/main/reading-from-cog.png?raw=true)
 
 
+
+For any GIS manipulation, understanding and doing further processing based on these tags will be key..
+![alt text](https://github.com/chippieTV/geowat/blob/main/IFD_0.png?raw=true)
+
+
+Also of note, only `IFD_0` has relevant GIS information, the rest of the IFDs' metadata seem related only to the pixel data inside them.
+![alt text](https://github.com/chippieTV/geowat/blob/main/IFD_0_vs_other.png?raw=true)
+
+
+
 ---
 
 A couple of points of note:
