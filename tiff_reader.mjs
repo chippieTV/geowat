@@ -1,4 +1,4 @@
-import { parseTag } from "./reader_utils.mjs";
+import { parseTag, getUncompressedPixels } from "./reader_utils.mjs";
 
 (async () => {
     const response = await fetch('tiff_reader.wasm');
@@ -140,7 +140,38 @@ function tiff_stats(t) { // for typing tiff_bytes is long - just use t
 
             return acc2;
         }, {});
-        // }, {});
+        
+
+        // messy but lets calculate some additional derived fields
+        // byte offsets for range requests indexed Y,X
+        // (just for reading order convenience)
+
+        // NOTE if the IFD doesn't have more than one tile it will be local value
+        // not array! In my test file IFD_6 only has a single tile so the TileOffsets
+        // and TileByteCounts are just values
+        if (acc[k].TileLength && acc[k].TileWidth) {
+            // assume ImageHeight and ImageWidth
+            // !! I named ImageHeight even though it's actually ImageLength !!
+
+            const X_TILES = Math.ceil(acc[k].ImageWidth / acc[k].TileWidth);
+            const Y_TILES = Math.ceil(acc[k].ImageHeight / acc[k].TileLength);
+
+            acc[k].YX_Tile_Offsets = [];
+
+            for (let y = 0; y < Y_TILES; y++) {
+                acc[k].YX_Tile_Offsets[y] = [];
+
+                for (let x = 0; x < X_TILES; x++) {
+                    // [start, end, length]
+                    acc[k].YX_Tile_Offsets[y][x] = [
+                        acc[k].TileOffsets[y * X_TILES + x],
+                        acc[k].TileOffsets[y * X_TILES + x] + acc[k].TileByteCounts[y * X_TILES + x],
+                        acc[k].TileByteCounts[y * X_TILES + x],
+                    ];
+                }
+            }
+
+        }
 
         return acc;
     }, {});
@@ -159,15 +190,32 @@ function tiff_stats(t) { // for typing tiff_bytes is long - just use t
         const canvas = document.getElementById("debug_canvas");
         const ctx = canvas.getContext("2d");
 
-        const ifd = "IFD_2";
-        const tile_idx = 2;
+        // TILE CONTROLS - ADD UI
+        const ifd = "IFD_0";
+        const tile_idx = 38;
 
-        // lots of moving data around for experimenting - not the most efficient
-        const tileData16Bit = new Uint16Array(t.buffer.slice(
-            // index into tile 1
-            parsed[ifd].TileOffsets[tile_idx],
-            parsed[ifd].TileOffsets[tile_idx] + parsed[ifd].TileByteCounts[tile_idx]
-        ));
+
+
+
+        // we have test data with deflate, use pako to extract the pixel data from the tile
+
+        // we don't know what pixels are just by looking at the output of decompression
+        // need to confirm with IFD
+        const pixels = new DataView(getUncompressedPixels(
+            parsed[ifd].Compression,
+            t.buffer.slice(
+                // index into tile 1
+                parsed[ifd].TileOffsets[tile_idx],
+                parsed[ifd].TileOffsets[tile_idx] + parsed[ifd].TileByteCounts[tile_idx]
+            )
+        ).buffer);
+
+        console.log(pixels)
+
+        console.log(new Uint16Array(pixels.buffer))
+    
+
+        const PIXELS_ARE_16BIT = parsed[ifd].BitsPerSample === 16;
 
         // scale data to 8 bit and put in each of RGB channels
         const PIXEL_COUNT = parsed[ifd].TileWidth * parsed[ifd].TileLength;
@@ -175,15 +223,22 @@ function tiff_stats(t) { // for typing tiff_bytes is long - just use t
         const processedPixels = new Uint8ClampedArray(PIXEL_COUNT * 4);
 
         for (let i = 0; i < PIXEL_COUNT; i++) {
-            const pixelval = tileData16Bit[i] >> 7;
+            // the data may be 8 or 16 bit .. check in IFD and hard coded bitshift scale for now
+            // const pixelval = pixels[i];
+            const pixelval = PIXELS_ARE_16BIT
+                // little endian means we are reading the right 8 bits as most significant
+                // and if we scale by bit-shifting 8 bits right, we essentially just discard
+                // the higher frequency data again, so we only need the most significant
+                // if we want to apply gamma or other tone mapping to the 16->8 bit conversion
+                ? pixels.getUint8(i*2+1)
+                : pixels.getUint8(i);
+
             processedPixels[i << 2] = pixelval; // R
             processedPixels[(i << 2) + 1] = pixelval; // G
             processedPixels[(i << 2) + 2] = pixelval; // B
             processedPixels[(i << 2) + 3] = 255; // A
 
         }
-
-
 
 
 

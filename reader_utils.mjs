@@ -1,3 +1,6 @@
+
+
+
 /**
  * 
  * @param {DataView} buffer - A DataView for the entire file (for now)
@@ -268,6 +271,18 @@ const getCompressionString = (compressionId) => {
         case 34892:
             // Photometric 34892 (LinearRaw) and uniform BitsPerSample 8
             return "Lossy JPEG";
+    }
+}
+
+export const getUncompressedPixels = (compressionType, rawbytes) => {
+    console.log("rawBytes", rawbytes);
+    switch (compressionType) {
+        case "No compression":
+            return new Uint16Array(rawbytes);
+        case "Deflate":
+            return pako.inflate(rawbytes)
+        default:
+            console.log("compression not supported")
     }
 }
 
