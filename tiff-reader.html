@@ -5,9 +5,11 @@
   <title>TIFF Reader in WebAssembly</title>
 </head>
 <body>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako_inflate.js" integrity="sha512-rZykJtMkjsfTXQC7Uh/FLtiVWGsn2dwZwsHbCTTwhF4ZYU79Zd9e0JYpfOKYBOjqI3E3W5vZ8EmCBUz7GF/NNg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <input type="file" id="file-input" style="display: block; padding: 16px;" />
   <script type="module" src="tiff_reader.mjs"></script>
 
-  <canvas width="256" height="256" id="debug_canvas" style="border: 1px solid #ccc;"></canvas>
+  <canvas width="256" height="256" id="debug_canvas" style="border: 1px solid #ccc; width: 512px; height: 512px; image-rendering: pixelated;"></canvas>
 </body>
 </html>
