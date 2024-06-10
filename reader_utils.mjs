@@ -4,20 +4,22 @@
 /**
  * 
  * @param {DataView} buffer - A DataView for the entire file (for now)
- * @param {number} initial_offset - Starting byte offset for current IFD
- * @param {number} local_offset - Tag offset within IFD (each tag is 12 bytes long)
+ * @param {number} IFD_offset - Starting byte offset for current IFD
+ * @param {number} tag_idx_in_IFD - Tag offset within IFD (each tag is 12 bytes long)
  * @param {boolean} littleEndian - file header specified endianness
  * @param {boolean} debug 
  */
-export const parseTag = (data_view, initial_offset, local_offset, littleEndian, debug = false) => {
+export const parseTag = (data_view, IFD_offset, tag_idx_in_IFD, littleEndian, debug = false) => {
+
+    const tag_location = IFD_offset + tag_idx_in_IFD * 12;
 
     // this is expecting the IFD gets passed a block of memory JUST for the tags
     // following the data pointers with this View is not possible
     // without access to all of the memory
-    const tag_id = data_view.getUint16(initial_offset + local_offset * 12, littleEndian);
-    const data_type_id = data_view.getUint16((initial_offset + local_offset * 12) + 2, littleEndian);
+    const tag_id = data_view.getUint16(tag_location, littleEndian);
+    const data_type_id = data_view.getUint16(tag_location + 2, littleEndian);
     const bytes_in_data_type = getDataTypeSize(data_type_id);
-    const count = data_view.getUint32((initial_offset + local_offset * 12) + 4, littleEndian);
+    const count = data_view.getUint32(tag_location + 4, littleEndian);
 
     // if data type * count <= 4, then the data is inline
     // otherwise it is an offset to get the data
@@ -28,7 +30,7 @@ export const parseTag = (data_view, initial_offset, local_offset, littleEndian, 
     const data_is_local = data_length <= 4;
 
     // awkwardly named but can refactor later
-    const data_or_address = data_view.getUint32((initial_offset + local_offset * 12) + 8, littleEndian);
+    const data_or_address = data_view.getUint32(tag_location + 8, littleEndian);
 
 
     // if (data_is_local && !debug) {
@@ -83,7 +85,7 @@ export const parseTag = (data_view, initial_offset, local_offset, littleEndian, 
         data_is_local,
         full_data,
         address: !data_is_local ? data_or_address : undefined,
-        parsed: data_is_local ? getLocalValue(tag_id, data_or_address) : undefined
+        parsed: processTag(data_view, tag_id, tag_location, bytes_in_data_type, count, data_or_address)
     }
 
 }
@@ -91,16 +93,21 @@ export const parseTag = (data_view, initial_offset, local_offset, littleEndian, 
 /**
  * Returns an array of parsed/fetched data from a tag ID and value input
  * 
- * @param {number} tag_id 
- * @param {number} value 
- * @returns {[string, string, number]}
+ * @param {DataView} data_view - reference to full data
+ * @param {number} tag_id - TIFF tag id
+ * @param {number} tag_location - offset of tag in the file
+ * @param {number} bytes_in_data_type - does not specify the actual data type's use
+ * @param {number} count - number of values of type referenced by the tag
+ * @param {number} value - if local data, the value, otherwise a byte offset to the full data
+ * 
+ * @returns {[string, string | object, number]}
  * 
  * [0] = Tag name
- * [1] = string description of value
+ * [1] = string description of value or complex object (in the case of GeoKeyDirectoryTag)
  * [2] = raw value (same as input - pass through for convenience)
  */
-const getLocalValue = (tag_id, value) => {
-    // mostly useful when we need to parse the types further as in the compression string
+const processTag = (data_view, tag_id, tag_location, bytes_in_data_type, count, value) => {
+    // useful when we need to parse the types further as in the compression string
     switch(tag_id) {
         // case 256:
         //     return ["ImageWidth", value, `${value}px`];
@@ -111,11 +118,25 @@ const getLocalValue = (tag_id, value) => {
             return ["Compression", getCompressionString(value), value];
         case 262:
             return ["PhotometricInterpretation", getPhotometricInterpretationString(value), value];
-        
+        case 34735:
+            debugger;
+            return ["GeoKeyDirectoryTag", getGeoKeyDirectoryTag(data_view, tag_location), value];
         default:
-            return [`not-implemented-${tag_id}`, value, value];
+            console.log(`not-implemented processTag for tag ${tag_id}`, value);
+            return undefined;
     }
 }
+
+const getGeoKeyDirectoryTag = (data_view, tag_location) => {
+    // tag_location should hold 34735 (we already know since we're calling this fn)
+    // data type at offset 2 is 'type' (datatype == SHORT)
+
+    // 
+    // const data_view.getUint16(tag_location, true);
+}
+
+
+
 
 /**
  * 
