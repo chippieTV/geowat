@@ -108,13 +108,8 @@ export const parseTag = (data_view, IFD_offset, tag_idx_in_IFD, littleEndian, de
  * [2] = raw value (same as input - pass through for convenience)
  */
 const processTag = (data_view, tag_id, tag_location, bytes_in_data_type, count, value, full_data) => {
-    // useful when we need to parse the types further as in the compression string
+    // useful when we need to parse the types further as in string descriptions, ASCII values or nested objects
     switch(tag_id) {
-        // case 256:
-        //     return ["ImageWidth", value, `${value}px`];
-        // case 257:
-        //     // ImageLength in Rows
-        //     return ["ImageHeight", value, `${value}px`];
         case 259:
             return ["Compression", getCompressionString(value), value];
         case 262:
@@ -145,9 +140,7 @@ const getGeoKeyDirectoryTag = (data_view, tag_location, full_data) => {
 
     
     
-    const GeoKeyDirectory = {
-        note: "single values are local data, arrays are references"
-    };
+    const GeoKeyDirectory = {};
     
     
     
@@ -165,10 +158,11 @@ const getGeoKeyDirectoryTag = (data_view, tag_location, full_data) => {
         )
 
         GeoKeyDirectory[gk[0]] = [gk[1], gk[2]];
-
     }
 
-    console.log(GeoKeyDirectory)
+    // console.log(GeoKeyDirectory)
+    return GeoKeyDirectory;
+
 }
 
 const getGeoKey = (id, tiff_tag_location, count, value_offset) => {
@@ -193,7 +187,7 @@ const getGeoKey = (id, tiff_tag_location, count, value_offset) => {
         case 1025: // SHORT
             return ["GTRasterTypeGeoKey", id, data];
         case 1026: // ASCII
-            return ["GTCitationTypeGeoKey", id, data];
+            return ["GTCitationGeoKey", id, data];
         
         // Geodetic CRS Parameter keys
         case 2048: // SHORT
@@ -298,7 +292,7 @@ const getGeoKey = (id, tiff_tag_location, count, value_offset) => {
  * @param {number} tag_id 
  * @returns {string}
  */
-const getTagString = (tag_id) => {
+export const getTagString = (tag_id) => {
     switch(tag_id) {
         case 254:
             return "NewSubfileType";

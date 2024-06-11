@@ -1,4 +1,4 @@
-import { parseTag, getUncompressedPixels } from "./reader_utils.mjs";
+import { parseTag, getTagString, getUncompressedPixels } from "./reader_utils.mjs";
 
 (async () => {
     const response = await fetch('tiff_reader.wasm');
@@ -99,9 +99,6 @@ function tiff_stats(t) { // for typing tiff_bytes is long - just use t
         IFD_data[`IFD_${IFD_id}`] = {};
 
         const number_of_tags = new DataView(t.buffer, IFD_offset, 2).getUint16(0, stats.littleEndian);
-        // console.log("number of tags", number_of_tags);
-        // IFD_data[`IFD_${IFD_id}`]["_IFD_offset"] = IFD_offset;
-        // IFD_data[`IFD_${IFD_id}`]["_number_of_tags"] = number_of_tags;
 
         for (let i = 0; i < number_of_tags; i++) {
             const {field_name, ...fields} = parseTag(dataview, IFD_offset + 2, i, stats.littleEndian);
@@ -110,12 +107,11 @@ function tiff_stats(t) { // for typing tiff_bytes is long - just use t
                 ...fields
             };
         }
-        // console.log("last 32bits of IFD", IFD_offset + 2 + (FIELD_SIZE * number_of_tags))
+
         // next IFD or 0
         const next_ifd_offset = new DataView(t.buffer, IFD_offset + 2 + (FIELD_SIZE * number_of_tags), 4).getUint32(0, stats.littleEndian);
     
-        // console.log("next IFD offset", next_ifd_offset);
-        
+        // last IFD is marked with 0
         if (next_ifd_offset === 0) break;
 
         IFD_offset = next_ifd_offset;
@@ -128,12 +124,67 @@ function tiff_stats(t) { // for typing tiff_bytes is long - just use t
     // RAW IFD_data
     console.log(IFD_data);
 
-    // parsed only 
+    // parsed only
+
+    // outer reduce runs through all IFDs
     const parsed = Object.entries(IFD_data).reduce((acc, [k, v]) => {
+
+        // we need to init the object to write deeply into it
+        acc[k] = {};
+
+
+        // inner reduce simplifies the object, stripping metadata such as types and counts
+        // since that data is parsed so that the final data should be in its correct form
         acc[k] = Object.entries(v).reduce((acc2, [k2, v2]) => {
             if (v2.parsed) {
-                // ugly but still finding the data shapes that make sense..
-                acc2[k2] = v2.parsed[1];
+                // special case, GeoKeyDirectoryTag contains fields that reference other TIFF tags
+                // specifically the GeoAsciiParamsTag. It may be more efficient to do differently
+                // but easier to understand running through this second pass
+
+                if (k2 === "GeoKeyDirectoryTag") {
+                    console.log(k2, v2, IFD_data["IFD_0"])
+                
+                    console.log(acc)
+
+                    Object.entries(v2.parsed[1]).forEach(([geoKeyK, geoKeyV]) => {
+                        // populate (side effect..) IFD_0 with simple parsed KV
+
+                        if (!acc["GeoKeys"]) {
+                            acc["GeoKeys"] = {};
+                        }
+
+                        if (Array.isArray(geoKeyV[1])) {
+                            // we need to find the entry in IFD_0
+
+                            const geoKeyTiffTagData =
+                                IFD_data["IFD_0"][getTagString(geoKeyV[1][0])]
+                                .full_data
+                                .slice(geoKeyV[1][2], geoKeyV[1][1] -1);
+
+                            // the array in geoKeyV is [TiffTagID, Count, Offset]
+                            // where offset is the offset into the field in the tiff tag
+                            // and count is the number of values to read from that tag's data
+                            acc["GeoKeys"][geoKeyK] = geoKeyTiffTagData;
+                            // acc["IFD_0"][geoKeyK] = geoKeyTiffTagData;
+
+                        } else {
+                            console.log(geoKeyK)
+                            console.log(geoKeyV)
+                            // strip out the ID and put in IFD_0
+                            acc["GeoKeys"][geoKeyK] = geoKeyV[1];
+                            // acc["IFD_0"][geoKeyK] = geoKeyV[1];
+                        }
+                    })
+                
+                    
+                
+                
+                } else {
+                    // ugly but still finding the data shapes that make sense..
+                    acc2[k2] = v2.parsed[1];
+                }
+
+
             } else {
                 acc2[k2] = v2.full_data
             }
