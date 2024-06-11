@@ -85,7 +85,7 @@ export const parseTag = (data_view, IFD_offset, tag_idx_in_IFD, littleEndian, de
         data_is_local,
         full_data,
         address: !data_is_local ? data_or_address : undefined,
-        parsed: processTag(data_view, tag_id, tag_location, bytes_in_data_type, count, data_or_address)
+        parsed: processTag(data_view, tag_id, tag_location, bytes_in_data_type, count, data_or_address, full_data)
     }
 
 }
@@ -99,6 +99,7 @@ export const parseTag = (data_view, IFD_offset, tag_idx_in_IFD, littleEndian, de
  * @param {number} bytes_in_data_type - does not specify the actual data type's use
  * @param {number} count - number of values of type referenced by the tag
  * @param {number} value - if local data, the value, otherwise a byte offset to the full data
+ * @param {number[]}
  * 
  * @returns {[string, string | object, number]}
  * 
@@ -106,7 +107,7 @@ export const parseTag = (data_view, IFD_offset, tag_idx_in_IFD, littleEndian, de
  * [1] = string description of value or complex object (in the case of GeoKeyDirectoryTag)
  * [2] = raw value (same as input - pass through for convenience)
  */
-const processTag = (data_view, tag_id, tag_location, bytes_in_data_type, count, value) => {
+const processTag = (data_view, tag_id, tag_location, bytes_in_data_type, count, value, full_data) => {
     // useful when we need to parse the types further as in the compression string
     switch(tag_id) {
         // case 256:
@@ -119,20 +120,174 @@ const processTag = (data_view, tag_id, tag_location, bytes_in_data_type, count, 
         case 262:
             return ["PhotometricInterpretation", getPhotometricInterpretationString(value), value];
         case 34735:
-            debugger;
-            return ["GeoKeyDirectoryTag", getGeoKeyDirectoryTag(data_view, tag_location), value];
+            // debugger;
+            return ["GeoKeyDirectoryTag", getGeoKeyDirectoryTag(data_view, tag_location, full_data), value];
         default:
-            console.log(`not-implemented processTag for tag ${tag_id}`, value);
+            // console.log(`not-implemented processTag for tag ${tag_id}`, value);
             return undefined;
     }
 }
 
-const getGeoKeyDirectoryTag = (data_view, tag_location) => {
-    // tag_location should hold 34735 (we already know since we're calling this fn)
-    // data type at offset 2 is 'type' (datatype == SHORT)
+/**
+ * 
+ * @param {DataView} data_view 
+ * @param {number} tag_location
+ * @param {number[]} full_data
+ * 
+ * @return {object}
+ */
+const getGeoKeyDirectoryTag = (data_view, tag_location, full_data) => {
+    // TODO endian-ness is hardcoded to LE
 
-    // 
-    // const data_view.getUint16(tag_location, true);
+    if (full_data[0] !== 1) console.error("GeoKeyDirectoryTag KeyDirectory Version is not 1");
+    if (full_data[1] !== 1) console.error("GeoKeyDirectoryTag Key Revision is not 1");
+    if (!(full_data[2] === 0 || full_data[2] === 1)) console.error("GeoKeyDirectoryTag Key Minor Revision is not 0 or 1", full_data[2]);
+
+    
+    
+    const GeoKeyDirectory = {
+        note: "single values are local data, arrays are references"
+    };
+    
+    
+    
+    const KeySetCount = full_data[3];
+
+    for (let i = 0; i < KeySetCount; i++) {
+        // these are they keys?
+
+        // id, tiff_tag_location, count, value_offset
+        const gk = getGeoKey(
+            full_data[4 + (i * 4)],
+            full_data[4 + (i * 4) + 1],
+            full_data[4 + (i * 4) + 2],
+            full_data[4 + (i * 4) + 3]
+        )
+
+        GeoKeyDirectory[gk[0]] = [gk[1], gk[2]];
+
+    }
+
+    console.log(GeoKeyDirectory)
+}
+
+const getGeoKey = (id, tiff_tag_location, count, value_offset) => {
+    // a geokey entry consists of 4 unsigned shorts
+
+    const data = tiff_tag_location === 0 && count === 1 ?
+        value_offset :
+        [tiff_tag_location, count, value_offset]; // TODO fetch value
+
+    // tiff_tag_location implies the value is stored in another TIFF tag
+    // this is maybe a confusing concept I'm not sure I'm following properly
+    // but it would seem that some non GeoKey contains a value referenced here
+
+    // the velue offset is the index into the tiff tag location which I take to mean
+    // the tiff tag points to an array of some data type, and this is the index into
+    // that array, and count is the number of elements of that array
+    switch(id) {
+
+        // GeoTIFF configuration keys
+        case 1024: // SHORT
+            return ["GTModelTypeGeoKey", id, data];
+        case 1025: // SHORT
+            return ["GTRasterTypeGeoKey", id, data];
+        case 1026: // ASCII
+            return ["GTCitationTypeGeoKey", id, data];
+        
+        // Geodetic CRS Parameter keys
+        case 2048: // SHORT
+            return ["GeographicTypeGeoKey", id, data];
+        case 2049: // ASCII
+            return ["GeogCitationGeoKey", id, data];
+        case 2050: // SHORT
+            return ["GeogGeodeticDatumGeoKey", id, data];
+        case 2051: // SHORT
+            return ["GeogPrimeMeridianGeoKey", id, data];
+        case 2052: // SHORT
+            return ["GeogLinearUnitsGeoKey", id, data];
+        case 2053: // DOUBLE
+            return ["GeogLinearUnitSizeGeoKey", id, data];
+        case 2054: // SHORT
+            return ["GeogAngularUnitsGeoKey", id, data];
+        case 2055: // DOUBLE
+            return ["GeogAngularUnitSizeGeoKey", id, data];
+        case 2056: // SHORT
+            return ["GeogEllipsoidGeoKey", id, data];
+        case 2057: // DOUBLE
+            return ["GeogSemiMajorAxisGeoKey", id, data];
+        case 2058: // DOUBLE
+            return ["GeogSemiMinorAxisGeoKey", id, data];
+        case 2059: // DOUBLE
+            return ["GeogInvFlatteningGeoKey", id, data];
+        case 2061: // DOUBLE
+            return ["GeogPrimeMeridianLongGeoKey", id, data];
+            
+
+        // Projected CRS Parameter Keys
+        case 2060: // Short
+            return ["GeogAzimuthUnitsGeoKey", id, data];
+        case 3072: // Short
+            return ["ProjectedCSTypeGeoKey", id, data];    
+        case 3073: // Ascii
+            return ["PCSCitationGeoKey", id, data];
+        case 3074: // Short
+            return ["ProjectionGeoKey", id, data];
+        case 3075: // Short
+            return ["ProjCoordTransGeoKey", id, data];
+        case 3076: // Short
+            return ["ProjLinearUnitsGeoKey", id, data];
+        case 3077: // Double
+            return ["ProjLinearUnitSizeGeoKey", id, data];
+        case 3078: // Double
+            return ["ProjStdParallel1GeoKey", id, data];
+        case 3079: // Double
+            return ["ProjStdParallel2GeoKey", id, data];
+        case 3080: // Double
+            return ["ProjNatOriginLongGeoKey", id, data];
+        case 3081: // Double
+            return ["ProjNatOriginLatGeoKey", id, data];
+        case 3082: // Double
+            return ["ProjFalseEastingGeoKey", id, data];
+        case 3083: // Double
+            return ["ProjFalseNorthingGeoKey", id, data];
+        case 3084: // Double
+            return ["ProjFalseOriginLongGeoKey", id, data];
+        case 3085: // Double
+            return ["ProjFalseOriginLatGeoKey", id, data];
+        case 3086: // Double
+            return ["ProjFalseOriginEastingGeoKey", id, data];
+        case 3087: // Double
+            return ["ProjFalseOriginNorthingGeoKey", id, data];
+        case 3088: // Double
+            return ["ProjCenterLongGeoKey", id, data];
+        case 3089: // Double
+            return ["ProjCenterLatGeoKey", id, data];
+        case 3090: // Double
+            return ["ProjCenterEastingGeoKey", id, data];
+        case 3091: // Double
+            return ["ProjCenterNorthingGeoKey", id, data];
+        case 3092: // Double
+            return ["ProjScaleAtNatOriginGeoKey", id, data];
+        case 3093: // Double
+            return ["ProjScaleAtCenterGeoKey", id, data];
+        case 3094: // Double
+            return ["ProjAzimuthAngleGeoKey", id, data];
+        case 3095: // Double
+            return ["ProjStraightVertPoleLongGeoKey", id, data];
+            
+        // Vertical CRS Parameter Keys (4096-5119)
+        case 4096: // Short
+            return ["VerticalCSTypeGeoKey", id, data];
+        case 4097: // Ascii
+            return ["VerticalCitationGeoKey", id, data];
+        case 4098: // Short
+            return ["VerticalDatumGeoKey", id, data];
+        case 4099: // Short
+            return ["VerticalUnitsGeoKey", id, data];
+        case 32767: // user defined params
+
+    }
 }
 
 
